@@ -2,9 +2,9 @@
 *.slo
 *.lo
 *.o
+*.d
 build/*
-test/runner
-runner.c
+
 # Compiled Dynamic libraries
 *.so
 *.dylib
@@ -17,3 +17,7 @@ runner.c
 # Editor backup files.
 .*.swp
 *~
+
+# Test garbage
+/test/runner
+/runner.c
