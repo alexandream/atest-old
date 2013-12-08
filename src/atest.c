@@ -13,11 +13,20 @@ static unsigned  _suite_count    = 0;
 
 /* Auxiliary functions declaration. */
 
+static void
+_add_failure(ATResult* result,
+             const char* file_name,
+             int line_number,
+             const char* message);
+
 static ATSuite*
 _create_suite(const char* name);
 
 static void
 _die(const char* fmt, ...);
+
+static int
+_discover_formatted_length(const char* format, va_list ap);
 
 static char*
 _duplicate_string(const char* input);
@@ -41,6 +50,7 @@ static void
 _insert_suite_in_order(ATSuite* suite);
 
 
+
 /* Interface functions definition. */
 
 void
@@ -49,6 +59,56 @@ at_add_case(ATSuite* suite, ATCase* tcase) {
 		_grow_case_pool(suite);
 	}
 	_insert_case_in_order(suite, tcase);
+}
+
+
+char*
+at_allocf(const char* format, ...) {
+	int total_length;
+	va_list discovery_args;
+	char* buffer = NULL;
+
+	va_start(discovery_args, format);
+	total_length = 1 + _discover_formatted_length(format, discovery_args);
+	va_end(discovery_args);
+	if (total_length <= 0) {
+		_die("Unable to figure out size of formatted string.");
+	}
+	if (total_length > 0) {
+		va_list args;
+		buffer = malloc(sizeof(char) * total_length+1);
+		if (buffer == NULL) {
+			_die("Unable to allocate string of size %d.", total_length+1);
+		}
+		va_start(args, format);
+		vsprintf(buffer, format, args);
+		va_end(args);
+	}
+	return buffer;
+}
+
+
+int
+at_check_with_msg(const char* file_name,
+                  int line_number,
+                  ATResult* result,
+                  int condition,
+                  const char* message) {
+	if (!condition) {
+		_add_failure(result, file_name, line_number, message);
+	}
+	return condition;
+}
+
+unsigned
+at_count_suites() {
+	return _suite_count;
+}
+
+
+ATSuite*
+at_get_nth_suite(unsigned index) {
+	return _suites[index];
 }
 
 
@@ -81,6 +141,13 @@ at_new_case(const char* name, ATFunction func) {
 
 /* Auxiliary functions definition. */
 
+static void
+_add_failure(ATResult* result,
+             const char* file_name,
+             int line_number,
+             const char* message) {
+
+}
 static ATSuite*
 _create_suite(const char* name) {
 	ATSuite* suite = malloc(sizeof(ATSuite));
@@ -103,6 +170,18 @@ _die(const char* format, ...) {
 	vfprintf(stderr, format, args);
 	va_end(args);
 	abort();
+}
+
+
+static int
+_discover_formatted_length(const char* format, va_list args) {
+	FILE* fd = fopen("/dev/null", "w");
+	int result = -1;
+	if (fd != NULL) {
+		result = vfprintf(fd, format, args);
+		fclose(fd);
+	}
+	return result;
 }
 
 
@@ -209,4 +288,36 @@ _insert_suite_in_order(ATSuite* suite) {
 
 	_suites[i] = suite;
 	_suite_count++;
+}
+
+
+void
+_print_state() {
+	printf("_suites: %p\n", _suites);
+	printf("_suite_capacity: %u\n", _suite_capacity);
+	printf("_suite_count: %u\n", _suite_count);
+	puts("----------");
+}
+
+
+void
+_print_suite(ATSuite* suite) {
+	puts("Begin Suite:");
+	printf(" suite addr: %p\n", suite);
+	if (suite != NULL) {
+		printf(" suite->name: %s\n", suite->name);
+		printf(" suite->case_count: %u\n", suite->case_count);
+		printf(" suite->case_capacity: %u\n", suite->case_capacity);
+		printf(" suite->cases: %p\n", suite->cases);
+		if (suite->case_count > 0) {
+			int i;
+			ATCase** cases = suite->cases;
+			puts(" Begin Cases: ");
+			for (i = 0; i < suite->case_count; i++) {
+				printf("  case[%d]: %s [%p].\n",
+				       i, cases[i]->name, cases[i]->function);
+			}
+		}
+	}
+	puts("----------");
 }
