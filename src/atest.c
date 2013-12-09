@@ -14,7 +14,7 @@ static int  _suite_count    = 0;
 /* Auxiliary functions declaration. */
 
 static void
-_add_failure(ATResult* result, ATFailure* failure);
+_append_failure(ATResult* result, ATFailure* failure);
 
 static ATFailure*
 _create_failure(const char* file_name, int line, const char* message);
@@ -47,6 +47,9 @@ static void
 _grow_failure_pool(ATResult* result);
 
 static void
+_grow_result_pool(ATResultList* result);
+
+static void
 _grow_suite_pool();
 
 static void
@@ -54,7 +57,6 @@ _insert_case_in_order(ATSuite* suite, ATCase* tcase);
 
 static void
 _insert_suite_in_order(ATSuite* suite);
-
 
 
 /* Interface functions definition. */
@@ -94,6 +96,16 @@ at_allocf(const char* format, ...) {
 }
 
 
+void
+at_append_result(ATResultList* result_list, ATResult* result) {
+	if (result_list->result_count == result_list->result_capacity) {
+		_grow_result_pool(result_list);
+	}
+	result_list->results[result_list->result_count] = result;
+	result_list->result_count++;
+}
+
+
 int
 at_check_with_msg(const char* file_name,
                   int line_number,
@@ -102,7 +114,7 @@ at_check_with_msg(const char* file_name,
                   const char* message) {
 	if (!condition) {
 		ATFailure* failure = _create_failure(file_name, line_number, message);
-		_add_failure(result, failure);
+		_append_failure(result, failure);
 	}
 	return condition;
 }
@@ -121,12 +133,19 @@ at_count_failures(ATResult* result) {
 
 
 int
+at_count_results(ATResultList* result_list) {
+	return result_list->result_count;
+}
+
+
+int
 at_count_suites() {
 	return _suite_count;
 }
 
 
-ATResult* at_execute_case(ATSuite* suite, ATCase* tcase) {
+ATResult*
+at_execute_case(ATSuite* suite, ATCase* tcase) {
 	ATResult* result = _create_result(suite, tcase);
 	tcase->function(result);
 	return result;
@@ -142,6 +161,12 @@ at_get_nth_case(ATSuite* suite, int index) {
 ATFailure*
 at_get_nth_failure(ATResult* result, int index) {
 	return result->failures[index];
+}
+
+
+ATResult*
+at_get_nth_result(ATResultList* result_list, int index) {
+	return result_list->results[index];
 }
 
 
@@ -177,11 +202,22 @@ at_new_case(const char* name, ATFunction func) {
 }
 
 
+ATResultList*
+at_new_result_list() {
+	ATResultList* result_list = malloc(sizeof(ATResultList));
+	if (result_list == NULL) {
+		_die("Unable to allocate result list.");
+	}
+	result_list->result_capacity = 0;
+	result_list->result_count    = 0;
+	result_list->results         = NULL;
+	return result_list;
+}
 
 /* Auxiliary functions definition. */
 
 static void
-_add_failure(ATResult* result, ATFailure* failure) {
+_append_failure(ATResult* result, ATFailure* failure) {
 	if (result->failure_count == result->failure_capacity) {
 		_grow_failure_pool(result);
 	}
@@ -197,6 +233,9 @@ _create_failure(const char* file_name, int line, const char* message) {
 		_die("Unable to allocate failure on %s[%d]: %s\n",
 		     file_name, line, message);
 	}
+	failure->file_name   = _duplicate_string(file_name);
+	failure->line_number = line;
+	failure->message     = message;
 	return failure;
 }
 
@@ -323,7 +362,7 @@ _grow_failure_pool(ATResult* result) {
 	int new_capacity =
 		(result->failure_capacity == 0) ? 8 : result->failure_capacity * 2;
 	result->failures =
-		realloc(result->failures, new_capacity * sizeof(ATFailure));
+		realloc(result->failures, new_capacity * sizeof(ATFailure*));
 	if (result->failures == NULL) {
 		_die("Unable to allocate memory while growing "
 		     "failure list of results for suite \"%s\", test \"%s\" "
@@ -332,6 +371,22 @@ _grow_failure_pool(ATResult* result) {
 		     result->failure_capacity, new_capacity);
 	}
 	result->failure_capacity = new_capacity;
+}
+
+
+static void
+_grow_result_pool(ATResultList* result_list) {
+	int new_capacity =
+		(result_list->result_capacity) ? result_list->result_capacity * 2
+	                                   : 64;
+	result_list->results =
+		realloc(result_list->results, new_capacity * sizeof(ATResult*));
+	if (result_list->results == NULL) {
+		_die("Unable to allocate memory while growing result list "
+		     "from %d to %d.\n",
+		     result_list->result_capacity, new_capacity);
+	}
+	result_list->result_capacity = new_capacity;
 }
 
 

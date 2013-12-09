@@ -11,6 +11,7 @@ typedef struct ATCase ATCase;
 typedef struct ATFailure ATFailure;
 typedef struct ATExecution ATExecution;
 typedef struct ATResult ATResult;
+typedef struct ATResultList ATResultList;
 typedef struct ATSuite ATSuite;
 
 typedef void (*ATFunction)(ATResult* result);
@@ -39,6 +40,12 @@ struct ATResult {
 	ATCase* tcase;
 };
 
+struct ATResultList {
+	int result_capacity;
+	int result_count;
+	ATResult** results;
+};
+
 struct ATSuite {
 	int case_capacity;
 	int case_count;
@@ -56,6 +63,9 @@ at_add_case(ATSuite* suite, ATCase* tcase);
 char*
 at_allocf(const char* format, ...);
 
+void
+at_append_result(ATResultList* result_list, ATResult* result);
+
 int
 at_check_with_msg(const char*, int, ATResult*, int, const char*);
 
@@ -64,6 +74,9 @@ at_count_cases(ATSuite* suite);
 
 int
 at_count_failures(ATResult* result);
+
+int
+at_count_results(ATResultList* result_list);
 
 int
 at_count_suites();
@@ -77,6 +90,9 @@ at_get_nth_case(ATSuite* suite, int index);
 ATFailure*
 at_get_nth_failure(ATResult* result, int index);
 
+ATResult*
+at_get_nth_result(ATResultList* result_list, int index);
+
 ATSuite*
 at_get_nth_suite(int index);
 
@@ -86,8 +102,8 @@ at_get_suite(const char* name);
 ATCase*
 at_new_case(const char* name, ATFunction func);
 
-ATResult*
-at_run_suite(ATSuite* suite);
+ATResultList*
+at_new_result_list();
 
 
 #define _at_check_msg(cond, ...) \
