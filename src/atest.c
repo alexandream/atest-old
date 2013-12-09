@@ -6,18 +6,21 @@
 
 /* Internal state. */
 
-static ATSuite** _suites         = NULL;
-static unsigned  _suite_capacity = 0;
-static unsigned  _suite_count    = 0;
+static ATSuite** _suites    = NULL;
+static int  _suite_capacity = 0;
+static int  _suite_count    = 0;
 
 
 /* Auxiliary functions declaration. */
 
 static void
-_add_failure(ATResult* result,
-             const char* file_name,
-             int line_number,
-             const char* message);
+_add_failure(ATResult* result, ATFailure* failure);
+
+static ATFailure*
+_create_failure(const char* file_name, int line, const char* message);
+
+static ATResult*
+_create_result(ATSuite* suite, ATCase* tcase);
 
 static ATSuite*
 _create_suite(const char* name);
@@ -39,6 +42,9 @@ _get_new_suite(const char* name);
 
 static void
 _grow_case_pool(ATSuite* suite);
+
+static void
+_grow_failure_pool(ATResult* result);
 
 static void
 _grow_suite_pool();
@@ -95,19 +101,55 @@ at_check_with_msg(const char* file_name,
                   int condition,
                   const char* message) {
 	if (!condition) {
-		_add_failure(result, file_name, line_number, message);
+		ATFailure* failure = _create_failure(file_name, line_number, message);
+		fprintf(stderr, "Warning: failed condition on %s:%d "
+		        "with message \"%s\"\n",
+		        file_name, line_number, message);
+		_add_failure(result, failure);
 	}
 	return condition;
 }
 
-unsigned
+
+int
+at_count_cases(ATSuite* suite) {
+	return suite->case_count;
+}
+
+
+int
+at_count_failures(ATResult* result) {
+	return result->failure_count;
+}
+
+
+int
 at_count_suites() {
 	return _suite_count;
 }
 
 
+ATResult* at_execute_case(ATSuite* suite, ATCase* tcase) {
+	ATResult* result = _create_result(suite, tcase);
+	tcase->function(result);
+	return result;
+}
+
+
+ATCase*
+at_get_nth_case(ATSuite* suite, int index) {
+	return suite->cases[index];
+}
+
+
+ATFailure*
+at_get_nth_failure(ATResult* result, int index) {
+	return result->failures[index];
+}
+
+
 ATSuite*
-at_get_nth_suite(unsigned index) {
+at_get_nth_suite(int index) {
 	return _suites[index];
 }
 
@@ -142,19 +184,49 @@ at_new_case(const char* name, ATFunction func) {
 /* Auxiliary functions definition. */
 
 static void
-_add_failure(ATResult* result,
-             const char* file_name,
-             int line_number,
-             const char* message) {
-
+_add_failure(ATResult* result, ATFailure* failure) {
+	if (result->failure_count == result->failure_capacity) {
+		_grow_failure_pool(result);
+	}
+	result->failures[result->failure_count] = failure;
+	result->failure_count++;
 }
+
+
+static ATFailure*
+_create_failure(const char* file_name, int line, const char* message) {
+	ATFailure* failure = malloc(sizeof(ATFailure));
+	if (failure == NULL) {
+		_die("Unable to allocate failure on %s[%d]: %s\n",
+		     file_name, line, message);
+	}
+	return failure;
+}
+
+
+static ATResult*
+_create_result(ATSuite* suite, ATCase* tcase) {
+	ATResult* result = malloc(sizeof(ATResult));
+	if (result == NULL) {
+		_die("Unable to allocate result for ",
+		     "suite \"%s\", test case \"%s\".",
+		     suite->name, tcase->name);
+	}
+	result->failure_capacity = 0;
+	result->failure_count = 0;
+	result->failures = NULL;
+	result->suite = suite;
+	result->tcase = tcase;
+	return result;
+}
+
+
 static ATSuite*
 _create_suite(const char* name) {
 	ATSuite* suite = malloc(sizeof(ATSuite));
 	if (suite == NULL) {
 		_die("Unable to allocate test suite \"%s\".\n", name);
 	}
-
 	suite->name = _duplicate_string(name);
 	suite->case_count = 0;
 	suite->case_capacity = 0;
@@ -199,7 +271,7 @@ _duplicate_string(const char* input) {
 
 static ATSuite*
 _find_suite(const char* name) {
-	unsigned i;
+	int i;
 
 	for (i = 0; i < _suite_count; i++) {
 		if (strcmp(_suites[i]->name, name) == 0) {
@@ -229,7 +301,7 @@ _grow_suite_pool() {
 	_suites = realloc(_suites, _suite_capacity * sizeof(ATSuite*));
 	if (_suites == NULL) {
 		_die("Unable to allocate memory while growing "
-		     "suite capacity from %u to %u.\n",
+		     "suite capacity from %d to %d.\n",
 		     _suite_capacity, _suite_capacity*2);
 	}
 }
@@ -237,15 +309,32 @@ _grow_suite_pool() {
 
 static void
 _grow_case_pool(ATSuite* suite) {
-	unsigned new_capacity =
+	int new_capacity =
 		(suite->case_capacity == 0) ? 64 : suite->case_capacity * 2;
 	suite->cases = realloc(suite->cases, new_capacity * sizeof(ATCase*));
 	if (suite->cases == NULL) {
-		_die("Unable_to_allocate memory while growing "
-		     "suite \"%s\"'s case capacity from %u to %u.\n",
+		_die("Unable to allocate memory while growing "
+		     "suite \"%s\"'s case capacity from %d to %d.\n",
 		     suite->case_capacity, new_capacity);
 	}
 	suite->case_capacity = new_capacity;
+}
+
+
+static void
+_grow_failure_pool(ATResult* result) {
+	int new_capacity =
+		(result->failure_capacity == 0) ? 8 : result->failure_capacity * 2;
+	result->failures =
+		realloc(result->failures, new_capacity * sizeof(ATFailure));
+	if (result->failures == NULL) {
+		_die("Unable to allocate memory while growing "
+		     "failure list of results for suite \"%s\", test \"%s\" "
+		     "from %d to %d.\n",
+		     result->suite->name, result->tcase->name,
+		     result->failure_capacity, new_capacity);
+	}
+	result->failure_capacity = new_capacity;
 }
 
 
@@ -294,8 +383,8 @@ _insert_suite_in_order(ATSuite* suite) {
 void
 _print_state() {
 	printf("_suites: %p\n", _suites);
-	printf("_suite_capacity: %u\n", _suite_capacity);
-	printf("_suite_count: %u\n", _suite_count);
+	printf("_suite_capacity: %d\n", _suite_capacity);
+	printf("_suite_count: %d\n", _suite_count);
 	puts("----------");
 }
 
@@ -306,8 +395,8 @@ _print_suite(ATSuite* suite) {
 	printf(" suite addr: %p\n", suite);
 	if (suite != NULL) {
 		printf(" suite->name: %s\n", suite->name);
-		printf(" suite->case_count: %u\n", suite->case_count);
-		printf(" suite->case_capacity: %u\n", suite->case_capacity);
+		printf(" suite->case_count: %d\n", suite->case_count);
+		printf(" suite->case_capacity: %d\n", suite->case_capacity);
 		printf(" suite->cases: %p\n", suite->cases);
 		if (suite->case_count > 0) {
 			int i;
