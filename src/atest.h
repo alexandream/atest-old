@@ -84,7 +84,9 @@ at_count_suites();
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase);
 
-ATCase*
+
+const char*
+at_get_full_name(ATResult* result);ATCase*
 at_get_nth_case(ATSuite* suite, int index);
 
 ATFailure*

@@ -151,6 +151,10 @@ at_execute_case(ATSuite* suite, ATCase* tcase) {
 	return result;
 }
 
+const char*
+at_get_full_name(ATResult* result) {
+	return at_allocf("%s.%s", result->suite->name, result->tcase->name);
+}
 
 ATCase*
 at_get_nth_case(ATSuite* suite, int index) {
