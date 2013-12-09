@@ -1,6 +1,10 @@
 #ifndef __ATEST__ATEST_H__
 #define __ATEST__ATEST_H__
 
+#ifndef AT_SUITE_NAME
+#define AT_SUITE_NAME Untitled
+#endif
+
 /* Type Definitions. */
 
 typedef struct ATCase ATCase;
@@ -106,5 +110,17 @@ _at_check(cond)
 
 void _print_state();
 void _print_suite(ATSuite* suite);
+
+#define AT_STEST(suite_name, case_name) \
+static void _at_run_ ## case_name(ATResult* _at_result);\
+__attribute__((constructor))\
+void _at_init_ ## case_name() {\
+	ATSuite* s = at_get_suite(#suite_name);\
+	at_add_case(s, at_new_case(#case_name, _at_run_ ## case_name));\
+}\
+static void _at_run_ ## case_name(ATResult* _at_result)
+
+#define _AT_STEST(suite_name, case_name) AT_STEST(suite_name, case_name)
+#define AT_TEST(case_name) _AT_STEST(AT_SUITE_NAME, case_name)
 
 #endif

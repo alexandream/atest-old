@@ -102,9 +102,6 @@ at_check_with_msg(const char* file_name,
                   const char* message) {
 	if (!condition) {
 		ATFailure* failure = _create_failure(file_name, line_number, message);
-		fprintf(stderr, "Warning: failed condition on %s:%d "
-		        "with message \"%s\"\n",
-		        file_name, line_number, message);
 		_add_failure(result, failure);
 	}
 	return condition;
