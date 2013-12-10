@@ -116,7 +116,7 @@ at_check_with_msg(const char* file_name,
 		ATFailure* failure = _create_failure(file_name, line_number, message);
 		_append_failure(result, failure);
 	}
-	return condition;
+	return !condition;
 }
 
 
