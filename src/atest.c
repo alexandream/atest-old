@@ -3,6 +3,9 @@
 #include <stdlib.h>
 
 #include "atest.h"
+/* Shared external state */
+
+ATResult* _at_result = NULL;
 
 /* Internal state. */
 
@@ -109,12 +112,11 @@ at_append_result(ATResultList* result_list, ATResult* result) {
 int
 at_check_with_msg(const char* file_name,
                   int line_number,
-                  ATResult* result,
                   int condition,
                   const char* message) {
 	if (!condition) {
 		ATFailure* failure = _create_failure(file_name, line_number, message);
-		_append_failure(result, failure);
+		_append_failure(_at_result, failure);
 	}
 	return !condition;
 }
@@ -146,9 +148,9 @@ at_count_suites() {
 
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase) {
-	ATResult* result = _create_result(suite, tcase);
-	tcase->function(result);
-	return result;
+	_at_result = _create_result(suite, tcase);
+	tcase->function();
+	return _at_result;
 }
 
 const char*

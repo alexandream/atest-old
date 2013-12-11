@@ -14,7 +14,7 @@ typedef struct ATResult ATResult;
 typedef struct ATResultList ATResultList;
 typedef struct ATSuite ATSuite;
 
-typedef void (*ATFunction)(ATResult* result);
+typedef void (*ATFunction)();
 
 struct ATCase {
 	ATFunction function;
@@ -54,6 +54,9 @@ struct ATSuite {
 	const char* name;
 };
 
+/* Data definitions */
+
+extern ATResult* _at_result;
 
 /* Function Definitions. */
 
@@ -67,7 +70,7 @@ void
 at_append_result(ATResultList* result_list, ATResult* result);
 
 int
-at_check_with_msg(const char*, int, ATResult*, int, const char*);
+at_check_with_msg(const char*, int, int, const char*);
 
 int
 at_count_cases(ATSuite* suite);
@@ -109,7 +112,7 @@ at_new_result_list();
 
 
 #define _at_check_msg(cond, ...) \
-at_check_with_msg(__FILE__,__LINE__,_at_result,cond,at_allocf(__VA_ARGS__))
+at_check_with_msg(__FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
 
 #define _at_check(cond) \
 _at_check_msg(cond, #cond)
