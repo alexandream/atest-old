@@ -135,7 +135,7 @@ void _print_suite(ATSuite* suite);
 #define AT_STEST(suite_name, case_name) \
 static void _at_run_ ## case_name(ATResult* _at_result);\
 __attribute__((constructor))\
-void _at_init_ ## case_name() {\
+static void _at_init_ ## case_name() {\
 	ATSuite* s = at_get_suite(#suite_name);\
 	at_add_case(s, at_new_case(#case_name, _at_run_ ## case_name));\
 }\
