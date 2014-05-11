@@ -111,23 +111,36 @@ ATResultList*
 at_new_result_list();
 
 
-#define _at_check_msg(cond, ...) \
-at_check_with_msg(__FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
+#define _at_check_msg(cond, msg) \
+at_check_with_msg(__FILE__,__LINE__,cond,msg)
+
 
 #define _at_check(cond) \
 _at_check_msg(cond, #cond)
 
-#define at_assert_msg(cond, ...) \
-if (_at_check_msg(cond, __VA_ARGS__)) return;
 
 #define at_assert(cond) \
 if (_at_check(cond)) return;
 
-#define at_expect_msg(cond, ...) \
-_at_check_msg(cond, __VA_ARGS__)
-
 #define at_expect(cond) \
 _at_check(cond)
+
+#define at_assert_msg(cond, msg) \
+if (_at_check_msg(cond, msg)) return;
+
+#define at_expect_msg(cond, msg) \
+at_check_msg(cond, msg)
+
+#if (__STDC_VERSION__ >= 199901L || USE_VARIADIC_MACROS)
+	#define _at_check_msgf(cond, ...) \
+	at_check_with_msg(__FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
+
+	#define at_assert_msgf(cond, ...) \
+	if (_at_check_msgf(cond, __VA_ARGS__)) return;
+
+	#define at_expect_msgf(cond, ...) \
+	_at_check_msgf(cond, __VA_ARGS__)
+#endif
 
 void _print_state();
 void _print_suite(ATSuite* suite);

@@ -1,6 +1,6 @@
 CC=clang
 
-CFLAGS=-pedantic -Wall -std=c89 -g -Wno-variadic-macros
+CFLAGS=-pedantic -Wall -std=c89 -g -DUSE_VARIADIC_MACROS -Wno-variadic-macros
 
 SOURCE_FILES=src/atest.c
 OBJ_FILES=$(SOURCE_FILES:src/%.c=build/%.o)
