@@ -5,10 +5,13 @@ CFLAGS=-pedantic -Wall -std=c89 -g -DUSE_VARIADIC_MACROS -Wno-variadic-macros
 SOURCE_FILES=src/atest.c
 OBJ_FILES=$(SOURCE_FILES:src/%.c=build/%.o)
 
-all:build/libatest.a
+all:build/libatest.a build/atest.h
 
 -include $(patsubst %.o, %.d, $(OBJ_FILES))
 
+
+build/atest.h: src/atest.h
+	@cp src/atest.h build/atest.h
 
 build/libatest.a: $(OBJ_FILES)
 	@ar rcs build/libatest.a $^
