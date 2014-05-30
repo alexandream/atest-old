@@ -196,17 +196,28 @@ at_get_suite(const char* name) {
 
 ATCase*
 at_new_case(const char* name, ATFunction func) {
+	return at_new_case_with_location(name, func, "", 0);
+}
+
+
+ATCase*
+at_new_case_with_location(const char* name,
+                          ATFunction func,
+                          const char* file_name,
+                          int line_number) {
 	ATCase* tcase = malloc(sizeof(ATCase));
 	if (tcase == NULL) {
 		_die("Unable to allocate test case \"%s\".\n", name);
 	}
 
 	tcase->name = _duplicate_string(name);
+	tcase->file_name = _duplicate_string(file_name);
+	tcase->line_number = line_number;
 	tcase->function = func;
 
 	return tcase;
-}
 
+}
 
 ATResultList*
 at_new_result_list() {
@@ -398,12 +409,14 @@ _grow_result_pool(ATResultList* result_list) {
 
 static void
 _insert_case_in_order(ATSuite* suite, ATCase* tcase) {
-	int i, j;
+	int i, j, name_cmp, higher_line;
 	ATCase* other;
 	/* Find the spot this suite should be inserted into (final value of i) */
 	for (i = 0; i < suite->case_count; i++) {
 		other = suite->cases[i];
-		if (strcmp(other->name, tcase->name) > 0) {
+		name_cmp = strcmp(other->file_name, tcase->file_name);
+		higher_line = (other->line_number > tcase->line_number);
+		if (name_cmp > 0 || (name_cmp == 0 && higher_line)) {
 			break;
 		}
 	}

@@ -19,6 +19,8 @@ typedef void (*ATFunction)();
 struct ATCase {
 	ATFunction function;
 	const char* name;
+	const char* file_name;
+	int line_number;
 };
 
 struct ATExecution {
@@ -107,6 +109,12 @@ at_get_suite(const char* name);
 ATCase*
 at_new_case(const char* name, ATFunction func);
 
+ATCase*
+at_new_case_with_location(const char* name,
+                          ATFunction func,
+                          const char* file_name,
+                          int line_number);
+
 ATResultList*
 at_new_result_list();
 
@@ -150,7 +158,7 @@ static void _at_run_ ## case_name(ATResult* _at_result);\
 __attribute__((constructor))\
 static void _at_init_ ## case_name() {\
 	ATSuite* s = at_get_suite(#suite_name);\
-	at_add_case(s, at_new_case(#case_name, _at_run_ ## case_name));\
+	at_add_case(s, at_new_case_with_location(#case_name, _at_run_ ## case_name, __FILE__, __LINE__));\
 }\
 static void _at_run_ ## case_name(ATResult* _at_result)
 
