@@ -23,7 +23,7 @@ static ATResult*
 _create_result(ATSuite* suite, ATCase* tcase);
 
 static ATSuite*
-_create_suite(const char* name);
+create_suite(const char* name);
 
 static void
 _die(const char* fmt, ...);
@@ -47,19 +47,19 @@ static void
 grow_list(ATPointerList* list, int initial, int factor);
 
 static void
-_grow_case_pool(ATSuite* suite);
-
-static void
 _grow_failure_pool(ATResult* result);
 
 static void
 _grow_result_pool(ATResultList* result);
 
 static void
-insert_in_order(ATPointerList* list, void* elem, comparator_t compare);
+init_list(ATPointerList* list);
 
 static void
-_insert_case_in_order(ATSuite* suite, ATCase* tcase);
+insert_in_order(ATPointerList* list, void* elem, comparator_t compare);
+
+static int
+compare_case_placement(const void* a, const void* b);
 
 static int
 compare_suites(const void* a, const void* b);
@@ -70,10 +70,10 @@ compare_suite_to_name(const void* a, const void* b);
 /* Interface functions definition. */
 void
 at_add_case(ATSuite* suite, ATCase* tcase) {
-	if (suite->case_count == suite->case_capacity) {
-		_grow_case_pool(suite);
+	if (suite->cases.count == suite->cases.capacity) {
+		grow_list(&suite->cases, 64, 2);
 	}
-	_insert_case_in_order(suite, tcase);
+	insert_in_order(&suite->cases, tcase, compare_case_placement);
 }
 
 
@@ -129,7 +129,7 @@ at_check_with_msg(ATResult* at_result,
 
 int
 at_count_cases(ATSuite* suite) {
-	return suite->case_count;
+	return suite->cases.count;
 }
 
 
@@ -165,7 +165,7 @@ at_get_full_name(ATResult* result) {
 
 ATCase*
 at_get_nth_case(ATSuite* suite, int index) {
-	return suite->cases[index];
+	return suite->cases.pointers[index];
 }
 
 
@@ -280,15 +280,13 @@ _create_result(ATSuite* suite, ATCase* tcase) {
 
 
 static ATSuite*
-_create_suite(const char* name) {
+create_suite(const char* name) {
 	ATSuite* suite = malloc(sizeof(ATSuite));
 	if (suite == NULL) {
 		_die("Unable to allocate test suite \"%s\".\n", name);
 	}
 	suite->name = _duplicate_string(name);
-	suite->case_count = 0;
-	suite->case_capacity = 0;
-	suite->cases = NULL;
+	init_list(&suite->cases);
 	return suite;
 }
 
@@ -347,7 +345,7 @@ find(ATPointerList* list, comparator_t compare, const void* argument) {
 
 static ATSuite*
 get_new_suite(const char* name) {
-	ATSuite* suite = _create_suite(name);
+	ATSuite* suite = create_suite(name);
 
 	if (_suites.count == _suites.capacity) {
 		grow_list(&_suites, 64, 2);
@@ -367,20 +365,6 @@ grow_list(ATPointerList* list, int initial, int factor) {
 		list->capacity, capacity);
 	}
 	list->capacity = capacity;
-}
-
-
-static void
-_grow_case_pool(ATSuite* suite) {
-	int new_capacity =
-		(suite->case_capacity == 0) ? 64 : suite->case_capacity * 2;
-	suite->cases = realloc(suite->cases, new_capacity * sizeof(ATCase*));
-	if (suite->cases == NULL) {
-		_die("Unable to allocate memory while growing "
-		     "suite \"%s\"'s case capacity from %d to %d.\n",
-		     suite->case_capacity, new_capacity);
-	}
-	suite->case_capacity = new_capacity;
 }
 
 
@@ -418,26 +402,12 @@ _grow_result_pool(ATResultList* result_list) {
 
 
 static void
-_insert_case_in_order(ATSuite* suite, ATCase* tcase) {
-	int i, j, name_cmp, higher_line;
-	ATCase* other;
-	/* Find the spot this suite should be inserted into (final value of i) */
-	for (i = 0; i < suite->case_count; i++) {
-		other = suite->cases[i];
-		name_cmp = strcmp(other->file_name, tcase->file_name);
-		higher_line = (other->line_number > tcase->line_number);
-		if (name_cmp > 0 || (name_cmp == 0 && higher_line)) {
-			break;
-		}
-	}
-	/* Move every case from i to the end one spot to the right */
-	for (j = suite->case_count -1; j >= i; j--) {
-		suite->cases[j+1] = suite->cases[j];
-	}
-
-	suite->cases[i] = tcase;
-	suite->case_count++;
+init_list(ATPointerList* list) {
+	list->capacity = 0;
+	list->count = 0;
+	list->pointers = NULL;
 }
+
 
 static void
 insert_in_order(ATPointerList* list, void* elem, comparator_t compare) {
@@ -465,9 +435,24 @@ compare_suites(const void* a, const void* b) {
 	return strcmp(suite1->name, suite2->name);
 }
 
+
 static int
 compare_suite_to_name(const void* a, const void* b) {
 	const ATSuite* suite = (const ATSuite*) a;
 	const char* name = (const char*) b;
 	return strcmp(suite->name, name);
+}
+
+
+static int
+compare_case_placement(const void* a, const void* b) {
+	const ATCase* case1 = (const ATCase*) a;
+	const ATCase* case2 = (const ATCase*) b;
+	int file_comparison = strcmp(case1->file_name, case2->file_name);
+	if (file_comparison == 0) {
+		return (case1->line_number > case2->line_number) ?  1 :
+		       (case1->line_number < case2->line_number) ? -1 :
+		                                                    0;
+	}
+	return file_comparison;
 }

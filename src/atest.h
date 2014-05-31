@@ -56,10 +56,7 @@ struct ATPointerList {
 };
 
 struct ATSuite {
-	int case_capacity;
-	int case_count;
-
-	ATCase** cases;
+	ATPointerList cases;
 	const char* name;
 };
 
