@@ -14,13 +14,13 @@ static ATPointerList _suites = { 0, 0, NULL };
 /* Auxiliary functions declaration. */
 
 static void
-_append_failure(ATResult* result, ATFailure* failure);
+append(ATPointerList* list, void* elem);
 
 static ATFailure*
-_create_failure(const char* file_name, int line, const char* message);
+create_failure(const char* file_name, int line, const char* message);
 
 static ATResult*
-_create_result(ATSuite* suite, ATCase* tcase);
+create_result(ATSuite* suite, ATCase* tcase);
 
 static ATSuite*
 create_suite(const char* name);
@@ -44,10 +44,7 @@ static ATSuite*
 get_new_suite(const char* name);
 
 static void
-grow_list(ATPointerList* list, int initial, int factor);
-
-static void
-_grow_result_pool(ATResultList* result);
+grow_list(ATPointerList* list);
 
 static void
 init_list(ATPointerList* list);
@@ -68,7 +65,7 @@ compare_suite_to_name(const void* a, const void* b);
 void
 at_add_case(ATSuite* suite, ATCase* tcase) {
 	if (suite->cases.count == suite->cases.capacity) {
-		grow_list(&suite->cases, 64, 2);
+		grow_list(&suite->cases);
 	}
 	insert_in_order(&suite->cases, tcase, compare_case_placement);
 }
@@ -102,11 +99,16 @@ at_allocf(const char* format, ...) {
 
 void
 at_append_result(ATResultList* result_list, ATResult* result) {
-	if (result_list->result_count == result_list->result_capacity) {
-		_grow_result_pool(result_list);
+	append(result_list, result);
+}
+
+static void
+append(ATPointerList* list, void* elem) {
+	if (list->count == list->capacity) {
+		grow_list(list);
 	}
-	result_list->results[result_list->result_count] = result;
-	result_list->result_count++;
+	list->pointers[list->count] = elem;
+	list->count++;
 }
 
 
@@ -117,8 +119,8 @@ at_check_with_msg(ATResult* at_result,
                   int condition,
                   const char* message) {
 	if (!condition) {
-		ATFailure* failure = _create_failure(file_name, line_number, message);
-		_append_failure(at_result, failure);
+		ATFailure* failure = create_failure(file_name, line_number, message);
+		append(&at_result->failures, failure);
 	}
 	return !condition;
 }
@@ -138,7 +140,7 @@ at_count_failures(ATResult* result) {
 
 int
 at_count_results(ATResultList* result_list) {
-	return result_list->result_count;
+	return result_list->count;
 }
 
 
@@ -150,7 +152,7 @@ at_count_suites() {
 
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase) {
-	ATResult* at_result = _create_result(suite, tcase);
+	ATResult* at_result = create_result(suite, tcase);
 	tcase->function(at_result);
 	return at_result;
 }
@@ -174,7 +176,7 @@ at_get_nth_failure(ATResult* result, int index) {
 
 ATResult*
 at_get_nth_result(ATResultList* result_list, int index) {
-	return result_list->results[index];
+	return result_list->pointers[index];
 }
 
 
@@ -227,26 +229,16 @@ at_new_result_list() {
 	if (result_list == NULL) {
 		_die("Unable to allocate result list.");
 	}
-	result_list->result_capacity = 0;
-	result_list->result_count    = 0;
-	result_list->results         = NULL;
+
+	init_list(result_list);
 	return result_list;
 }
 
 /* Auxiliary functions definition. */
 
-static void
-_append_failure(ATResult* result, ATFailure* failure) {
-	if (result->failures.count == result->failures.capacity) {
-		grow_list(&result->failures, 64, 2);
-	}
-	result->failures.pointers[result->failures.count] = failure;
-	result->failures.count++;
-}
-
 
 static ATFailure*
-_create_failure(const char* file_name, int line, const char* message) {
+create_failure(const char* file_name, int line, const char* message) {
 	ATFailure* failure = malloc(sizeof(ATFailure));
 	if (failure == NULL) {
 		_die("Unable to allocate failure on %s[%d]: %s\n",
@@ -260,7 +252,7 @@ _create_failure(const char* file_name, int line, const char* message) {
 
 
 static ATResult*
-_create_result(ATSuite* suite, ATCase* tcase) {
+create_result(ATSuite* suite, ATCase* tcase) {
 	ATResult* result = malloc(sizeof(ATResult));
 	if (result == NULL) {
 		_die("Unable to allocate result for ",
@@ -343,7 +335,7 @@ get_new_suite(const char* name) {
 	ATSuite* suite = create_suite(name);
 
 	if (_suites.count == _suites.capacity) {
-		grow_list(&_suites, 64, 2);
+		grow_list(&_suites);
 	}
 
 	insert_in_order(&_suites, suite, compare_suites);
@@ -351,8 +343,8 @@ get_new_suite(const char* name) {
 }
 
 static void
-grow_list(ATPointerList* list, int initial, int factor) {
-	int capacity = (list->capacity == 0) ? initial : list->capacity * factor;
+grow_list(ATPointerList* list) {
+	int capacity = (list->capacity == 0) ? 64 : list->capacity * 2;
 	list->pointers = realloc(list->pointers, capacity * sizeof(void*));
 	if (list->pointers == NULL) {
 		_die("Unable to allocate memory while growing pointer "
@@ -360,22 +352,6 @@ grow_list(ATPointerList* list, int initial, int factor) {
 		list->capacity, capacity);
 	}
 	list->capacity = capacity;
-}
-
-
-static void
-_grow_result_pool(ATResultList* result_list) {
-	int new_capacity =
-		(result_list->result_capacity) ? result_list->result_capacity * 2
-	                                   : 64;
-	result_list->results =
-		realloc(result_list->results, new_capacity * sizeof(ATResult*));
-	if (result_list->results == NULL) {
-		_die("Unable to allocate memory while growing result list "
-		     "from %d to %d.\n",
-		     result_list->result_capacity, new_capacity);
-	}
-	result_list->result_capacity = new_capacity;
 }
 
 

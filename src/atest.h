@@ -12,8 +12,9 @@ typedef struct ATFailure ATFailure;
 typedef struct ATExecution ATExecution;
 typedef struct ATPointerList ATPointerList;
 typedef struct ATResult ATResult;
-typedef struct ATResultList ATResultList;
 typedef struct ATSuite ATSuite;
+
+typedef ATPointerList ATResultList;
 
 typedef void (*ATFunction)(ATResult*);
 
@@ -42,15 +43,8 @@ struct ATFailure {
 
 struct ATResult {
 	ATPointerList failures;
-
 	ATSuite* suite;
 	ATCase* tcase;
-};
-
-struct ATResultList {
-	int result_capacity;
-	int result_count;
-	ATResult** results;
 };
 
 struct ATSuite {
