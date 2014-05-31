@@ -6,10 +6,8 @@
 #endif
 
 /* Type Definitions. */
-
 typedef struct ATCase ATCase;
 typedef struct ATFailure ATFailure;
-typedef struct ATExecution ATExecution;
 typedef struct ATPointerList ATPointerList;
 typedef struct ATResult ATResult;
 typedef struct ATSuite ATSuite;
@@ -24,6 +22,7 @@ struct ATPointerList {
 	void** pointers;
 };
 
+
 struct ATCase {
 	ATFunction function;
 	const char* name;
@@ -31,9 +30,6 @@ struct ATCase {
 	int line_number;
 };
 
-struct ATExecution {
-	int placeholder;
-};
 
 struct ATFailure {
 	const char* file_name;
@@ -49,6 +45,9 @@ struct ATResult {
 
 struct ATSuite {
 	ATPointerList cases;
+	ATPointerList constructors;
+	ATPointerList setups;
+	ATPointerList teardowns;
 	const char* name;
 };
 
@@ -95,6 +94,8 @@ at_count_suites();
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase);
 
+ATResultList*
+at_execute_suite(ATSuite* suite, ATResultList* out_results);
 
 const char*
 at_get_full_name(ATResult* result);

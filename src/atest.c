@@ -3,21 +3,37 @@
 #include <stdlib.h>
 
 #include "atest.h"
-/* Shared external state */
+typedef struct ATAuxiliary ATAuxiliary;
+typedef struct ATConstructor ATConstructor;
 
-/* Internal state. */
+struct ATAuxiliary {
+	ATFunction function;
+	int index;
+};
+struct ATConstructor {
+	void (*function)();
+	int index;
+};
+
+
 typedef int (*comparator_t)(const void*, const void*);
 
+/* Internal state. */
 static ATPointerList _suites = { 0, 0, NULL };
 
 
 /* Auxiliary functions declaration. */
-
 static void
 append(ATPointerList* list, void* elem);
 
 static int
+compare_auxiliary_placement(const void* a, const void* b);
+
+static int
 compare_case_placement(const void* a, const void* b);
+
+static int
+compare_constructor_placement(const void* a, const void* b);
 
 static int
 compare_suites(const void* a, const void* b);
@@ -64,12 +80,40 @@ insert_in_order(ATPointerList* list, void* elem, comparator_t compare);
 /* Interface functions definition. */
 void
 at_add_case(ATSuite* suite, ATCase* tcase) {
-	if (suite->cases.count == suite->cases.capacity) {
-		grow_list(&suite->cases);
-	}
 	insert_in_order(&suite->cases, tcase, compare_case_placement);
 }
 
+
+void
+at_add_constructor(ATSuite* suite, void(*function)(), int index) {
+	ATConstructor* constructor = (ATConstructor*) malloc(sizeof(ATConstructor));
+	constructor->function = function;
+	constructor->index = index;
+
+	insert_in_order(&suite->constructors,
+	                constructor,
+	                compare_constructor_placement);
+}
+
+
+void
+at_add_setup(ATSuite* suite, ATFunction function, int index) {
+	ATAuxiliary* setup = (ATAuxiliary*) malloc(sizeof(ATAuxiliary));
+	setup->function = function;
+	setup->index = index;
+
+	insert_in_order(&suite->setups, setup, compare_auxiliary_placement);
+}
+
+
+void
+at_add_teardown(ATSuite* suite, ATFunction function, int index) {
+	ATAuxiliary* teardown = (ATAuxiliary*) malloc(sizeof(ATAuxiliary));
+	teardown->function = function;
+	teardown->index = index;
+
+	insert_in_order(&suite->teardowns, teardown, compare_auxiliary_placement);
+}
 
 char*
 at_allocf(const char* format, ...) {
@@ -144,10 +188,43 @@ at_count_suites() {
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase) {
 	ATResult* at_result = create_result(suite, tcase);
+	int i;
+	/* Execute all the setups in order before running the test.*/
+	for (i = 0; i < suite->setups.count; i++) {
+		ATAuxiliary* setup = (ATAuxiliary*) suite->setups.pointers[i];
+		setup->function(at_result);
+	}
 	tcase->function(at_result);
+
+	/* Execute all the teardowns in order before finishing the test. */
+	for (i = 0; i < suite->teardowns.count; i++) {
+		ATAuxiliary* teardown = (ATAuxiliary*) suite->teardowns.pointers[i];
+		teardown->function(at_result);
+	}
 	return at_result;
 }
 
+
+ATResultList*
+at_execute_suite(ATSuite* suite, ATResultList* out_results) {
+	int i, case_count;
+	ATResultList* results = (out_results != NULL) ? out_results :
+	                                                at_new_result_list();
+	ATPointerList* constructors = &suite->constructors;
+	/* Execute all the constructors in order before starting the suite */
+	for (i = 0; i < constructors->count; i++) {
+		ATConstructor* constructor = (ATConstructor*) constructors->pointers[i];
+		constructor->function();
+	}
+
+	case_count = at_count_cases(suite);
+	for (i = 0; i < case_count; i++) {
+		ATCase* tcase = at_get_nth_case(suite, i);
+		ATResult* result = at_execute_case(suite, tcase);
+		at_append_result(results, result);
+	}
+	return results;
+}
 
 const char*
 at_get_full_name(ATResult* result) {
@@ -241,6 +318,16 @@ append(ATPointerList* list, void* elem) {
 
 
 static int
+compare_auxiliary_placement(const void* a, const void* b) {
+	const ATAuxiliary* auxiliary1 = (const ATAuxiliary*) a;
+	const ATAuxiliary* auxiliary2 = (const ATAuxiliary*) b;
+	return (auxiliary1->index > auxiliary2->index)   ?  1 :
+	       (auxiliary1 -> index < auxiliary2->index) ? -1
+	                                     :  0;
+}
+
+
+static int
 compare_case_placement(const void* a, const void* b) {
 	const ATCase* case1 = (const ATCase*) a;
 	const ATCase* case2 = (const ATCase*) b;
@@ -251,6 +338,16 @@ compare_case_placement(const void* a, const void* b) {
 		                                                    0;
 	}
 	return file_comparison;
+}
+
+
+static int
+compare_constructor_placement(const void* a, const void* b) {
+	const ATConstructor* constructor1 = (const ATConstructor*) a;
+	const ATConstructor* constructor2 = (const ATConstructor*) b;
+	return (constructor1->index > constructor2->index)   ?  1 :
+	       (constructor1 -> index < constructor2->index) ? -1
+	                                     :  0;
 }
 
 
@@ -307,6 +404,7 @@ create_suite(const char* name) {
 	}
 	suite->name = _duplicate_string(name);
 	init_list(&suite->cases);
+	init_list(&suite->constructors);
 	return suite;
 }
 
@@ -368,10 +466,6 @@ static ATSuite*
 get_new_suite(const char* name) {
 	ATSuite* suite = create_suite(name);
 
-	if (_suites.count == _suites.capacity) {
-		grow_list(&_suites);
-	}
-
 	insert_in_order(&_suites, suite, compare_suites);
 	return suite;
 }
@@ -401,6 +495,11 @@ init_list(ATPointerList* list) {
 static void
 insert_in_order(ATPointerList* list, void* elem, comparator_t compare) {
 	int i, j;
+	/* If the list needs growing, do it here. */
+	if (list->count == list->capacity) {
+		grow_list(list);
+	}
+
 	/* Find the spot this element should be inserted into (final value of i) */
 	for (i = 0; i < list->count; i++) {
 		if (compare(list->pointers[i], elem) > 0) {
