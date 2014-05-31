@@ -16,6 +16,15 @@ static ATPointerList _suites = { 0, 0, NULL };
 static void
 append(ATPointerList* list, void* elem);
 
+static int
+compare_case_placement(const void* a, const void* b);
+
+static int
+compare_suites(const void* a, const void* b);
+
+static int
+compare_suite_to_name(const void* a, const void* b);
+
 static ATFailure*
 create_failure(const char* file_name, int line, const char* message);
 
@@ -51,15 +60,6 @@ init_list(ATPointerList* list);
 
 static void
 insert_in_order(ATPointerList* list, void* elem, comparator_t compare);
-
-static int
-compare_case_placement(const void* a, const void* b);
-
-static int
-compare_suites(const void* a, const void* b);
-
-static int
-compare_suite_to_name(const void* a, const void* b);
 
 /* Interface functions definition. */
 void
@@ -100,15 +100,6 @@ at_allocf(const char* format, ...) {
 void
 at_append_result(ATResultList* result_list, ATResult* result) {
 	append(result_list, result);
-}
-
-static void
-append(ATPointerList* list, void* elem) {
-	if (list->count == list->capacity) {
-		grow_list(list);
-	}
-	list->pointers[list->count] = elem;
-	list->count++;
 }
 
 
@@ -157,10 +148,12 @@ at_execute_case(ATSuite* suite, ATCase* tcase) {
 	return at_result;
 }
 
+
 const char*
 at_get_full_name(ATResult* result) {
 	return at_allocf("%s.%s", result->suite->name, result->tcase->name);
 }
+
 
 ATCase*
 at_get_nth_case(ATSuite* suite, int index) {
@@ -223,6 +216,7 @@ at_new_case_with_location(const char* name,
 
 }
 
+
 ATResultList*
 at_new_result_list() {
 	ATResultList* result_list = malloc(sizeof(ATResultList));
@@ -234,7 +228,46 @@ at_new_result_list() {
 	return result_list;
 }
 
+
 /* Auxiliary functions definition. */
+static void
+append(ATPointerList* list, void* elem) {
+	if (list->count == list->capacity) {
+		grow_list(list);
+	}
+	list->pointers[list->count] = elem;
+	list->count++;
+}
+
+
+static int
+compare_case_placement(const void* a, const void* b) {
+	const ATCase* case1 = (const ATCase*) a;
+	const ATCase* case2 = (const ATCase*) b;
+	int file_comparison = strcmp(case1->file_name, case2->file_name);
+	if (file_comparison == 0) {
+		return (case1->line_number > case2->line_number) ?  1 :
+		       (case1->line_number < case2->line_number) ? -1 :
+		                                                    0;
+	}
+	return file_comparison;
+}
+
+
+static int
+compare_suites(const void* a, const void* b) {
+	const ATSuite* suite1 = (const ATSuite*) a;
+	const ATSuite* suite2 = (const ATSuite*) b;
+	return strcmp(suite1->name, suite2->name);
+}
+
+
+static int
+compare_suite_to_name(const void* a, const void* b) {
+	const ATSuite* suite = (const ATSuite*) a;
+	const char* name = (const char*) b;
+	return strcmp(suite->name, name);
+}
 
 
 static ATFailure*
@@ -312,11 +345,6 @@ _duplicate_string(const char* input) {
 }
 
 
-static ATSuite*
-find_suite(const char* name) {
-	return find(&_suites, compare_suite_to_name, name);
-}
-
 static void*
 find(ATPointerList* list, comparator_t compare, const void* argument) {
 	int i;
@@ -331,6 +359,12 @@ find(ATPointerList* list, comparator_t compare, const void* argument) {
 
 
 static ATSuite*
+find_suite(const char* name) {
+	return find(&_suites, compare_suite_to_name, name);
+}
+
+
+static ATSuite*
 get_new_suite(const char* name) {
 	ATSuite* suite = create_suite(name);
 
@@ -341,6 +375,7 @@ get_new_suite(const char* name) {
 	insert_in_order(&_suites, suite, compare_suites);
 	return suite;
 }
+
 
 static void
 grow_list(ATPointerList* list) {
@@ -380,33 +415,4 @@ insert_in_order(ATPointerList* list, void* elem, comparator_t compare) {
 
 	list->pointers[i] = elem;
 	list->count++;
-}
-
-static int
-compare_suites(const void* a, const void* b) {
-	const ATSuite* suite1 = (const ATSuite*) a;
-	const ATSuite* suite2 = (const ATSuite*) b;
-	return strcmp(suite1->name, suite2->name);
-}
-
-
-static int
-compare_suite_to_name(const void* a, const void* b) {
-	const ATSuite* suite = (const ATSuite*) a;
-	const char* name = (const char*) b;
-	return strcmp(suite->name, name);
-}
-
-
-static int
-compare_case_placement(const void* a, const void* b) {
-	const ATCase* case1 = (const ATCase*) a;
-	const ATCase* case2 = (const ATCase*) b;
-	int file_comparison = strcmp(case1->file_name, case2->file_name);
-	if (file_comparison == 0) {
-		return (case1->line_number > case2->line_number) ?  1 :
-		       (case1->line_number < case2->line_number) ? -1 :
-		                                                    0;
-	}
-	return file_comparison;
 }
