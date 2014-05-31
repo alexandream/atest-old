@@ -6,10 +6,9 @@
 /* Shared external state */
 
 /* Internal state. */
+typedef int (*comparator_t)(const void*, const void*);
 
-static ATSuite** _suites    = NULL;
-static int  _suite_capacity = 0;
-static int  _suite_count    = 0;
+static ATPointerList _suites = { 0, 0, NULL };
 
 
 /* Auxiliary functions declaration. */
@@ -35,11 +34,17 @@ _discover_formatted_length(const char* format, va_list ap);
 static char*
 _duplicate_string(const char* input);
 
-static ATSuite*
-_find_suite(const char* name);
+static void*
+find(ATPointerList* list, comparator_t compare, const void* argument);
 
 static ATSuite*
-_get_new_suite(const char* name);
+find_suite(const char* name);
+
+static ATSuite*
+get_new_suite(const char* name);
+
+static void
+grow_list(ATPointerList* list, int initial, int factor);
 
 static void
 _grow_case_pool(ATSuite* suite);
@@ -51,14 +56,16 @@ static void
 _grow_result_pool(ATResultList* result);
 
 static void
-_grow_suite_pool();
+insert_in_order(ATPointerList* list, void* elem, comparator_t compare);
 
 static void
 _insert_case_in_order(ATSuite* suite, ATCase* tcase);
 
-static void
-_insert_suite_in_order(ATSuite* suite);
+static int
+compare_suites(const void* a, const void* b);
 
+static int
+compare_suite_to_name(const void* a, const void* b);
 
 /* Interface functions definition. */
 void
@@ -140,7 +147,7 @@ at_count_results(ATResultList* result_list) {
 
 int
 at_count_suites() {
-	return _suite_count;
+	return _suites.count;
 }
 
 
@@ -176,16 +183,16 @@ at_get_nth_result(ATResultList* result_list, int index) {
 
 ATSuite*
 at_get_nth_suite(int index) {
-	return _suites[index];
+	return _suites.pointers[index];
 }
 
 
 ATSuite*
 at_get_suite(const char* name) {
-	ATSuite* result = _find_suite(name);
+	ATSuite* result = find_suite(name);
 
 	if (result == NULL) {
-		result = _get_new_suite(name);
+		result = get_new_suite(name);
 	}
 
 	return result;
@@ -321,12 +328,17 @@ _duplicate_string(const char* input) {
 
 
 static ATSuite*
-_find_suite(const char* name) {
+find_suite(const char* name) {
+	return find(&_suites, compare_suite_to_name, name);
+}
+
+static void*
+find(ATPointerList* list, comparator_t compare, const void* argument) {
 	int i;
 
-	for (i = 0; i < _suite_count; i++) {
-		if (strcmp(_suites[i]->name, name) == 0) {
-			return _suites[i];
+	for (i = 0; i < list->count; i++) {
+		if (compare(_suites.pointers[i], argument) == 0) {
+			return _suites.pointers[i];
 		}
 	}
 	return NULL;
@@ -334,27 +346,27 @@ _find_suite(const char* name) {
 
 
 static ATSuite*
-_get_new_suite(const char* name) {
+get_new_suite(const char* name) {
 	ATSuite* suite = _create_suite(name);
 
-	if (_suite_count == _suite_capacity) {
-		_grow_suite_pool();
+	if (_suites.count == _suites.capacity) {
+		grow_list(&_suites, 64, 2);
 	}
 
-	_insert_suite_in_order(suite);
+	insert_in_order(&_suites, suite, compare_suites);
 	return suite;
 }
 
-
 static void
-_grow_suite_pool() {
-	_suite_capacity = (_suite_capacity == 0) ? 64 : _suite_capacity * 2;
-	_suites = realloc(_suites, _suite_capacity * sizeof(ATSuite*));
-	if (_suites == NULL) {
-		_die("Unable to allocate memory while growing "
-		     "suite capacity from %d to %d.\n",
-		     _suite_capacity, _suite_capacity*2);
+grow_list(ATPointerList* list, int initial, int factor) {
+	int capacity = (list->capacity == 0) ? initial : list->capacity * factor;
+	list->pointers = realloc(list->pointers, capacity * sizeof(void*));
+	if (list->pointers == NULL) {
+		_die("Unable to allocate memory while growing pointer "
+		"list capacity from %d to %d.\n",
+		list->capacity, capacity);
 	}
+	list->capacity = capacity;
 }
 
 
@@ -427,23 +439,35 @@ _insert_case_in_order(ATSuite* suite, ATCase* tcase) {
 	suite->case_count++;
 }
 
-
 static void
-_insert_suite_in_order(ATSuite* suite) {
+insert_in_order(ATPointerList* list, void* elem, comparator_t compare) {
 	int i, j;
-	ATSuite* other;
-	/* Find the spot this suite should be inserted into (final value of i) */
-	for (i = 0; i < _suite_count; i++) {
-		other = _suites[i];
-		if (strcmp(other->name, suite->name) > 0) {
+	/* Find the spot this element should be inserted into (final value of i) */
+	for (i = 0; i < list->count; i++) {
+		if (compare(list->pointers[i], elem) > 0) {
 			break;
 		}
 	}
-	/* Move every suite from i to the end one spot to the right */
-	for (j = _suite_count -1; j >= i; j--) {
-		_suites[j+1] = _suites[j];
+
+	/* Move every elem from i to the end one spot to the right */
+	for (j = list->count -1; j >= i; j--) {
+		list->pointers[j+1] = list->pointers[j];
 	}
 
-	_suites[i] = suite;
-	_suite_count++;
+	list->pointers[i] = elem;
+	list->count++;
+}
+
+static int
+compare_suites(const void* a, const void* b) {
+	const ATSuite* suite1 = (const ATSuite*) a;
+	const ATSuite* suite2 = (const ATSuite*) b;
+	return strcmp(suite1->name, suite2->name);
+}
+
+static int
+compare_suite_to_name(const void* a, const void* b) {
+	const ATSuite* suite = (const ATSuite*) a;
+	const char* name = (const char*) b;
+	return strcmp(suite->name, name);
 }

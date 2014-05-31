@@ -52,7 +52,7 @@ struct ATResultList {
 struct ATPointerList {
 	int capacity;
 	int count;
-	void* pointers;
+	void** pointers;
 };
 
 struct ATSuite {
@@ -175,11 +175,14 @@ _at_check_msg(result, cond, msg)
 #endif
 
 /* Crazy macros for auto registering constructors, setups, teardowns and tests */
+/* SF: Stringify -- Indirect stringification to use expansion. */
 #define SF2(x) #x
-#define SF(x) SF2(x)
-#define TP2(x, y) x ## y
-#define TP(x, y) TP2(x, y)
-#define UNIQUE(identifier) TP(identifier, __LINE__)
+#define AT_SF(x) SF2(x)
+/* PT: Paste Tokens */
+#define PT2(x, y) x ## y
+#define AT_PT(x, y) PT2(x, y)
+/* UNIQUE: Uses the current line number to create a likely unique identifier */
+#define AT_UNIQUE(identifier) AT_PT(identifier, __LINE__)
 
 #ifndef AT_COMPILER_CONSTRUCTOR_DIRECTIVE
 #define AT_COMPILER_CONSTRUCTOR_DIRECTIVE __attribute__((constructor))
@@ -187,35 +190,35 @@ _at_check_msg(result, cond, msg)
 
 /* Define and register a constructor function to be run before the suite. */
 #define AT_CONSTRUCTOR(suite_name) \
-static void UNIQUE(TP(_at_constructor__,suite_name)) ();\
+static void AT_UNIQUE(AT_PT(_at_constructor__,suite_name)) ();\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void UNIQUE(TP(_at_init_constructor__,suite_name)) () {\
-	ATSuite* s = at_get_suite(SF(suite_name));\
-	at_add_constructor(s, UNIQUE(TP(_at_constructor__,suite_name)), __LINE__);\
+static void AT_UNIQUE(AT_PT(_at_init_constructor__,suite_name)) () {\
+	ATSuite* s = at_get_suite(AT_SF(suite_name));\
+	at_add_constructor(s, AT_UNIQUE(AT_PT(_at_constructor__,suite_name)), __LINE__);\
 }\
-static void UNIQUE(TP(_at_constructor__,suite_name))()
+static void AT_UNIQUE(AT_PT(_at_constructor__,suite_name))()
 
 
 /* Define and register a setup function to be run before each case. */
 #define AT_SETUP(suite_name)\
-static void UNIQUE(TP(_at_setup__,suite_name))(ATResult* at_result);\
+static void AT_UNIQUE(AT_PT(_at_setup__,suite_name))(ATResult* at_result);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void UNIQUE(TP(_at_init_setup__,suite_name))() {\
-	ATSuite* s = at_get_suite(SF(suite_name));\
-	at_add_setup(s, UNIQUE(TP(_at_setup__,suite_name)), __LINE__);\
+static void AT_UNIQUE(AT_PT(_at_init_setup__,suite_name))() {\
+	ATSuite* s = at_get_suite(AT_SF(suite_name));\
+	at_add_setup(s, AT_UNIQUE(AT_PT(_at_setup__,suite_name)), __LINE__);\
 }\
-static void UNIQUE(TP(_at_setup__,suite_name))()
+static void AT_UNIQUE(AT_PT(_at_setup__,suite_name))()
 
 
 /* Define and register a teardown function to be run after each case. */
 #define AT_TEARDOWN(suite_name)\
-static void UNIQUE(TP(_at_teardown__,suite_name))(ATResult* at_result);\
+static void AT_UNIQUE(AT_PT(_at_teardown__,suite_name))(ATResult* at_result);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void UNIQUE(TP(_at_init_teardown__,suite_name))() {\
-	ATSuite* s = at_get_suite(SF(suite_name));\
-	at_add_teardown(s, UNIQUE(TP(_at_teardown__,suite_name)), __LINE__);\
+static void AT_UNIQUE(AT_PT(_at_init_teardown__,suite_name))() {\
+	ATSuite* s = at_get_suite(AT_SF(suite_name));\
+	at_add_teardown(s, AT_UNIQUE(AT_PT(_at_teardown__,suite_name)), __LINE__);\
 }\
-static void UNIQUE(TP(_at_teardown__,suite_name))()
+static void AT_UNIQUE(AT_PT(_at_teardown__,suite_name))()
 
 
 /* Define and register a test case function. */
@@ -223,7 +226,7 @@ static void UNIQUE(TP(_at_teardown__,suite_name))()
 static void _at_run__ ## case_name(ATResult* at_result);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
 static void _at_init__ ## case_name() {\
-	ATSuite* s = at_get_suite(SF(suite_name));\
+	ATSuite* s = at_get_suite(AT_SF(suite_name));\
 	at_add_case(s, at_new_case_with_location(#case_name, _at_run__ ## case_name, __FILE__, __LINE__));\
 }\
 static void _at_run__ ## case_name(ATResult* at_result)
