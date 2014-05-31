@@ -17,6 +17,12 @@ typedef struct ATSuite ATSuite;
 
 typedef void (*ATFunction)(ATResult*);
 
+struct ATPointerList {
+	int capacity;
+	int count;
+	void** pointers;
+};
+
 struct ATCase {
 	ATFunction function;
 	const char* name;
@@ -35,9 +41,7 @@ struct ATFailure {
 };
 
 struct ATResult {
-	int failure_capacity;
-	int failure_count;
-	ATFailure** failures;
+	ATPointerList failures;
 
 	ATSuite* suite;
 	ATCase* tcase;
@@ -47,12 +51,6 @@ struct ATResultList {
 	int result_capacity;
 	int result_count;
 	ATResult** results;
-};
-
-struct ATPointerList {
-	int capacity;
-	int count;
-	void** pointers;
 };
 
 struct ATSuite {

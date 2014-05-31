@@ -47,9 +47,6 @@ static void
 grow_list(ATPointerList* list, int initial, int factor);
 
 static void
-_grow_failure_pool(ATResult* result);
-
-static void
 _grow_result_pool(ATResultList* result);
 
 static void
@@ -135,7 +132,7 @@ at_count_cases(ATSuite* suite) {
 
 int
 at_count_failures(ATResult* result) {
-	return result->failure_count;
+	return result->failures.count;
 }
 
 
@@ -171,7 +168,7 @@ at_get_nth_case(ATSuite* suite, int index) {
 
 ATFailure*
 at_get_nth_failure(ATResult* result, int index) {
-	return result->failures[index];
+	return result->failures.pointers[index];
 }
 
 
@@ -240,11 +237,11 @@ at_new_result_list() {
 
 static void
 _append_failure(ATResult* result, ATFailure* failure) {
-	if (result->failure_count == result->failure_capacity) {
-		_grow_failure_pool(result);
+	if (result->failures.count == result->failures.capacity) {
+		grow_list(&result->failures, 64, 2);
 	}
-	result->failures[result->failure_count] = failure;
-	result->failure_count++;
+	result->failures.pointers[result->failures.count] = failure;
+	result->failures.count++;
 }
 
 
@@ -270,11 +267,9 @@ _create_result(ATSuite* suite, ATCase* tcase) {
 		     "suite \"%s\", test case \"%s\".",
 		     suite->name, tcase->name);
 	}
-	result->failure_capacity = 0;
-	result->failure_count = 0;
-	result->failures = NULL;
 	result->suite = suite;
 	result->tcase = tcase;
+	init_list(&result->failures);
 	return result;
 }
 
@@ -365,23 +360,6 @@ grow_list(ATPointerList* list, int initial, int factor) {
 		list->capacity, capacity);
 	}
 	list->capacity = capacity;
-}
-
-
-static void
-_grow_failure_pool(ATResult* result) {
-	int new_capacity =
-		(result->failure_capacity == 0) ? 8 : result->failure_capacity * 2;
-	result->failures =
-		realloc(result->failures, new_capacity * sizeof(ATFailure*));
-	if (result->failures == NULL) {
-		_die("Unable to allocate memory while growing "
-		     "failure list of results for suite \"%s\", test \"%s\" "
-		     "from %d to %d.\n",
-		     result->suite->name, result->tcase->name,
-		     result->failure_capacity, new_capacity);
-	}
-	result->failure_capacity = new_capacity;
 }
 
 
