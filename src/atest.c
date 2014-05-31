@@ -5,8 +5,6 @@
 #include "atest.h"
 /* Shared external state */
 
-ATResult* _at_result = NULL;
-
 /* Internal state. */
 
 static ATSuite** _suites    = NULL;
@@ -63,7 +61,6 @@ _insert_suite_in_order(ATSuite* suite);
 
 
 /* Interface functions definition. */
-
 void
 at_add_case(ATSuite* suite, ATCase* tcase) {
 	if (suite->case_count == suite->case_capacity) {
@@ -110,13 +107,14 @@ at_append_result(ATResultList* result_list, ATResult* result) {
 
 
 int
-at_check_with_msg(const char* file_name,
+at_check_with_msg(ATResult* at_result,
+                  const char* file_name,
                   int line_number,
                   int condition,
                   const char* message) {
 	if (!condition) {
 		ATFailure* failure = _create_failure(file_name, line_number, message);
-		_append_failure(_at_result, failure);
+		_append_failure(at_result, failure);
 	}
 	return !condition;
 }
@@ -148,9 +146,9 @@ at_count_suites() {
 
 ATResult*
 at_execute_case(ATSuite* suite, ATCase* tcase) {
-	_at_result = _create_result(suite, tcase);
-	tcase->function();
-	return _at_result;
+	ATResult* at_result = _create_result(suite, tcase);
+	tcase->function(at_result);
+	return at_result;
 }
 
 const char*
@@ -420,7 +418,7 @@ _insert_case_in_order(ATSuite* suite, ATCase* tcase) {
 			break;
 		}
 	}
-	/* Move every suite from i to the end one spot to the right */
+	/* Move every case from i to the end one spot to the right */
 	for (j = suite->case_count -1; j >= i; j--) {
 		suite->cases[j+1] = suite->cases[j];
 	}
@@ -448,36 +446,4 @@ _insert_suite_in_order(ATSuite* suite) {
 
 	_suites[i] = suite;
 	_suite_count++;
-}
-
-
-void
-_print_state() {
-	printf("_suites: %p\n", _suites);
-	printf("_suite_capacity: %d\n", _suite_capacity);
-	printf("_suite_count: %d\n", _suite_count);
-	puts("----------");
-}
-
-
-void
-_print_suite(ATSuite* suite) {
-	puts("Begin Suite:");
-	printf(" suite addr: %p\n", suite);
-	if (suite != NULL) {
-		printf(" suite->name: %s\n", suite->name);
-		printf(" suite->case_count: %d\n", suite->case_count);
-		printf(" suite->case_capacity: %d\n", suite->case_capacity);
-		printf(" suite->cases: %p\n", suite->cases);
-		if (suite->case_count > 0) {
-			int i;
-			ATCase** cases = suite->cases;
-			puts(" Begin Cases: ");
-			for (i = 0; i < suite->case_count; i++) {
-				printf("  case[%d]: %s [%p].\n",
-				       i, cases[i]->name, cases[i]->function);
-			}
-		}
-	}
-	puts("----------");
 }

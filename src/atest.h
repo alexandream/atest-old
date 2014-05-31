@@ -10,11 +10,12 @@
 typedef struct ATCase ATCase;
 typedef struct ATFailure ATFailure;
 typedef struct ATExecution ATExecution;
+typedef struct ATPointerList ATPointerList;
 typedef struct ATResult ATResult;
 typedef struct ATResultList ATResultList;
 typedef struct ATSuite ATSuite;
 
-typedef void (*ATFunction)();
+typedef void (*ATFunction)(ATResult*);
 
 struct ATCase {
 	ATFunction function;
@@ -48,19 +49,31 @@ struct ATResultList {
 	ATResult** results;
 };
 
+struct ATPointerList {
+	int capacity;
+	int count;
+	void* pointers;
+};
+
 struct ATSuite {
 	int case_capacity;
 	int case_count;
-	ATCase** cases;
 
+	ATCase** cases;
 	const char* name;
 };
 
-/* Data definitions */
-
-extern ATResult* _at_result;
 
 /* Function Definitions. */
+
+void
+at_add_constructor(ATSuite* suite, void (*constructor)(), int line);
+
+void
+at_add_setup(ATSuite* suite, ATFunction setup, int line);
+
+void
+at_add_teardown(ATSuite* suite, ATFunction teardown, int line);
 
 void
 at_add_case(ATSuite* suite, ATCase* tcase);
@@ -72,7 +85,11 @@ void
 at_append_result(ATResultList* result_list, ATResult* result);
 
 int
-at_check_with_msg(const char*, int, int, const char*);
+at_check_with_msg(ATResult* at_result,
+                  const char* file_name,
+                  int line_number,
+                  int condition,
+                  const char* message);
 
 int
 at_count_cases(ATSuite* suite);
@@ -118,51 +135,98 @@ at_new_case_with_location(const char* name,
 ATResultList*
 at_new_result_list();
 
-
-#define _at_check_msg(cond, msg) \
-at_check_with_msg(__FILE__,__LINE__,cond,msg)
-
-
-#define _at_check(cond) \
-_at_check_msg(cond, #cond)
+/* Simple macros for asserts and expects */
+#define _at_check_msg(result, cond, msg) \
+at_check_with_msg(result, __FILE__,__LINE__,cond,msg)
 
 
-#define at_assert(cond) \
-if (_at_check(cond)) return;
+#define _at_check(result, cond) \
+_at_check_msg(result, cond, #cond)
 
-#define at_expect(cond) \
-_at_check(cond)
 
-#define at_assert_msg(cond, msg) \
-if (_at_check_msg(cond, msg)) return;
+#define at_assert(result, cond) \
+if (_at_check(result, cond)) return;
 
-#define at_expect_msg(cond, msg) \
-at_check_msg(cond, msg)
+
+#define at_expect(result, cond) \
+_at_check(result, cond)
+
+
+#define at_assert_msg(result, cond, msg) \
+if (_at_check_msg(result, cond, msg)) return;
+
+
+#define at_expect_msg(result, cond, msg) \
+_at_check_msg(result, cond, msg)
+
 
 #if (__STDC_VERSION__ >= 199901L || USE_VARIADIC_MACROS)
-	#define _at_check_msgf(cond, ...) \
-	at_check_with_msg(__FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
+	#define _at_check_msgf(result, cond, ...) \
+	at_check_with_msg(result, __FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
 
-	#define at_assert_msgf(cond, ...) \
-	if (_at_check_msgf(cond, __VA_ARGS__)) return;
 
-	#define at_expect_msgf(cond, ...) \
-	_at_check_msgf(cond, __VA_ARGS__)
+	#define at_assert_msgf(result, cond, ...) \
+	if (_at_check_msgf(result, cond, __VA_ARGS__)) return;
+
+
+	#define at_expect_msgf(result, cond, ...) \
+	_at_check_msgf(result, cond, __VA_ARGS__)
+
 #endif
 
-void _print_state();
-void _print_suite(ATSuite* suite);
+/* Crazy macros for auto registering constructors, setups, teardowns and tests */
+#define SF2(x) #x
+#define SF(x) SF2(x)
+#define TP2(x, y) x ## y
+#define TP(x, y) TP2(x, y)
+#define UNIQUE(identifier) TP(identifier, __LINE__)
 
-#define AT_STEST(suite_name, case_name) \
-static void _at_run_ ## case_name(ATResult* _at_result);\
-__attribute__((constructor))\
-static void _at_init_ ## case_name() {\
-	ATSuite* s = at_get_suite(#suite_name);\
-	at_add_case(s, at_new_case_with_location(#case_name, _at_run_ ## case_name, __FILE__, __LINE__));\
+#ifndef AT_COMPILER_CONSTRUCTOR_DIRECTIVE
+#define AT_COMPILER_CONSTRUCTOR_DIRECTIVE __attribute__((constructor))
+#endif
+
+/* Define and register a constructor function to be run before the suite. */
+#define AT_CONSTRUCTOR(suite_name) \
+static void UNIQUE(TP(_at_constructor__,suite_name)) ();\
+AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
+static void UNIQUE(TP(_at_init_constructor__,suite_name)) () {\
+	ATSuite* s = at_get_suite(SF(suite_name));\
+	at_add_constructor(s, UNIQUE(TP(_at_constructor__,suite_name)), __LINE__);\
 }\
-static void _at_run_ ## case_name(ATResult* _at_result)
+static void UNIQUE(TP(_at_constructor__,suite_name))()
 
-#define _AT_STEST(suite_name, case_name) AT_STEST(suite_name, case_name)
-#define AT_TEST(case_name) _AT_STEST(AT_SUITE_NAME, case_name)
+
+/* Define and register a setup function to be run before each case. */
+#define AT_SETUP(suite_name)\
+static void UNIQUE(TP(_at_setup__,suite_name))(ATResult* at_result);\
+AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
+static void UNIQUE(TP(_at_init_setup__,suite_name))() {\
+	ATSuite* s = at_get_suite(SF(suite_name));\
+	at_add_setup(s, UNIQUE(TP(_at_setup__,suite_name)), __LINE__);\
+}\
+static void UNIQUE(TP(_at_setup__,suite_name))()
+
+
+/* Define and register a teardown function to be run after each case. */
+#define AT_TEARDOWN(suite_name)\
+static void UNIQUE(TP(_at_teardown__,suite_name))(ATResult* at_result);\
+AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
+static void UNIQUE(TP(_at_init_teardown__,suite_name))() {\
+	ATSuite* s = at_get_suite(SF(suite_name));\
+	at_add_teardown(s, UNIQUE(TP(_at_teardown__,suite_name)), __LINE__);\
+}\
+static void UNIQUE(TP(_at_teardown__,suite_name))()
+
+
+/* Define and register a test case function. */
+#define AT_TEST(suite_name, case_name) \
+static void _at_run__ ## case_name(ATResult* at_result);\
+AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
+static void _at_init__ ## case_name() {\
+	ATSuite* s = at_get_suite(SF(suite_name));\
+	at_add_case(s, at_new_case_with_location(#case_name, _at_run__ ## case_name, __FILE__, __LINE__));\
+}\
+static void _at_run__ ## case_name(ATResult* at_result)
+
 
 #endif
