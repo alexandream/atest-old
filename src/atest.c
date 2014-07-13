@@ -212,6 +212,7 @@ at_execute_suite(ATSuite* suite, ATResultList* out_results) {
 	                                                at_new_result_list();
 	ATPointerList* constructors = &suite->constructors;
 	/* Execute all the constructors in order before starting the suite */
+
 	for (i = 0; i < constructors->count; i++) {
 		ATConstructor* constructor = (ATConstructor*) constructors->pointers[i];
 		constructor->function();

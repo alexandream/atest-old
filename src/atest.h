@@ -73,7 +73,7 @@ void
 at_append_result(ATResultList* result_list, ATResult* result);
 
 int
-at_check_with_msg(ATResult* at_result,
+at_check_with_msg(ATResult* result_name,
                   const char* file_name,
                   int line_number,
                   int condition,
@@ -128,51 +128,22 @@ ATResultList*
 at_new_result_list();
 
 /* Simple macros for asserts and expects */
-#define _at_check_msg(result, cond, msg) \
+#define at_check_msg(result, cond, msg) \
 at_check_with_msg(result, __FILE__,__LINE__,cond,msg)
 
 
-#define _at_check(result, cond) \
-_at_check_msg(result, cond, #cond)
-
-
-#define at_assert(result, cond) \
-if (_at_check(result, cond)) return;
-
-
-#define at_expect(result, cond) \
-_at_check(result, cond)
-
-
-#define at_assert_msg(result, cond, msg) \
-if (_at_check_msg(result, cond, msg)) return;
-
-
-#define at_expect_msg(result, cond, msg) \
-_at_check_msg(result, cond, msg)
-
-
 #if (__STDC_VERSION__ >= 199901L || USE_VARIADIC_MACROS)
-	#define _at_check_msgf(result, cond, ...) \
+	#define at_check_msgf(result, cond, ...) \
 	at_check_with_msg(result, __FILE__,__LINE__,cond,at_allocf(__VA_ARGS__))
-
-
-	#define at_assert_msgf(result, cond, ...) \
-	if (_at_check_msgf(result, cond, __VA_ARGS__)) return;
-
-
-	#define at_expect_msgf(result, cond, ...) \
-	_at_check_msgf(result, cond, __VA_ARGS__)
-
 #endif
 
 /* Crazy macros for auto registering constructors, setups, teardowns and tests */
 /* SF: Stringify -- Indirect stringification to use expansion. */
-#define SF2(x) #x
-#define AT_SF(x) SF2(x)
+#define AT_SF2(x) #x
+#define AT_SF(x) AT_SF2(x)
 /* PT: Paste Tokens */
-#define PT2(x, y) x ## y
-#define AT_PT(x, y) PT2(x, y)
+#define AT_PT2(x, y) x ## y
+#define AT_PT(x, y) AT_PT2(x, y)
 /* UNIQUE: Uses the current line number to create a likely unique identifier */
 #define AT_UNIQUE(identifier) AT_PT(identifier, __LINE__)
 
@@ -182,46 +153,48 @@ _at_check_msg(result, cond, msg)
 
 /* Define and register a constructor function to be run before the suite. */
 #define AT_CONSTRUCTOR(suite_name) \
-static void AT_UNIQUE(AT_PT(_at_constructor__,suite_name)) ();\
+static void AT_UNIQUE(AT_PT(at_g_constructor_,suite_name)) ();\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void AT_UNIQUE(AT_PT(_at_init_constructor__,suite_name)) () {\
+static void AT_UNIQUE(AT_PT(at_g_init_constructor_,suite_name)) () {\
 	ATSuite* s = at_get_suite(AT_SF(suite_name));\
-	at_add_constructor(s, AT_UNIQUE(AT_PT(_at_constructor__,suite_name)), __LINE__);\
+	at_add_constructor(s, \
+	                   AT_UNIQUE(AT_PT(at_g_constructor_,suite_name)),\
+					   __LINE__);\
 }\
-static void AT_UNIQUE(AT_PT(_at_constructor__,suite_name))()
+static void AT_UNIQUE(AT_PT(at_g_constructor_,suite_name))()
 
 
 /* Define and register a setup function to be run before each case. */
-#define AT_SETUP(suite_name)\
-static void AT_UNIQUE(AT_PT(_at_setup__,suite_name))(ATResult* at_result);\
+#define AT_SETUP(suite_name, result_name)\
+static void AT_UNIQUE(AT_PT(at_g_setup_,suite_name))(ATResult* result_name);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void AT_UNIQUE(AT_PT(_at_init_setup__,suite_name))() {\
+static void AT_UNIQUE(AT_PT(at_g_init_setup_,suite_name))() {\
 	ATSuite* s = at_get_suite(AT_SF(suite_name));\
-	at_add_setup(s, AT_UNIQUE(AT_PT(_at_setup__,suite_name)), __LINE__);\
+	at_add_setup(s, AT_UNIQUE(AT_PT(at_g_setup_,suite_name)), __LINE__);\
 }\
-static void AT_UNIQUE(AT_PT(_at_setup__,suite_name))()
+static void AT_UNIQUE(AT_PT(at_g_setup_,suite_name))()
 
 
 /* Define and register a teardown function to be run after each case. */
-#define AT_TEARDOWN(suite_name)\
-static void AT_UNIQUE(AT_PT(_at_teardown__,suite_name))(ATResult* at_result);\
+#define AT_TEARDOWN(suite_name, result_name)\
+static void AT_UNIQUE(AT_PT(at_g_teardown_,suite_name))(ATResult* result_name);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void AT_UNIQUE(AT_PT(_at_init_teardown__,suite_name))() {\
+static void AT_UNIQUE(AT_PT(at_g_init_teardown_,suite_name))() {\
 	ATSuite* s = at_get_suite(AT_SF(suite_name));\
-	at_add_teardown(s, AT_UNIQUE(AT_PT(_at_teardown__,suite_name)), __LINE__);\
+	at_add_teardown(s, AT_UNIQUE(AT_PT(at_g_teardown_,suite_name)), __LINE__);\
 }\
-static void AT_UNIQUE(AT_PT(_at_teardown__,suite_name))()
+static void AT_UNIQUE(AT_PT(at_g_teardown_,suite_name))()
 
 
 /* Define and register a test case function. */
-#define AT_TEST(suite_name, case_name) \
-static void _at_run__ ## case_name(ATResult* at_result);\
+#define AT_TEST(suite_name, case_name, result_name) \
+static void at_g_run_ ## case_name(ATResult* result_name);\
 AT_COMPILER_CONSTRUCTOR_DIRECTIVE \
-static void _at_init__ ## case_name() {\
+static void at_g_init_ ## case_name() {\
 	ATSuite* s = at_get_suite(AT_SF(suite_name));\
-	at_add_case(s, at_new_case_with_location(#case_name, _at_run__ ## case_name, __FILE__, __LINE__));\
+	at_add_case(s, at_new_case_with_location(#case_name, at_g_run_ ## case_name, __FILE__, __LINE__));\
 }\
-static void _at_run__ ## case_name(ATResult* at_result)
+static void at_g_run_ ## case_name(ATResult* result_name)
 
 
 #endif
